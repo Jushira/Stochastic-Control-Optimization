@@ -1,0 +1,98 @@
+---
+title: "Project 3"
+author: "Jushira"
+date: "March 21, 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+For LASSO, we are using the glmnet function.
+
+```{r}
+library(glmnet)
+
+load('data.rdata')
+cvfit = cv.glmnet(x = X, y = y)
+lasso = glmnet(X, y, alpha=1, lambda=c(cvfit$lambda.min))
+lasso
+# coef(cvfit,lambda=lasso$lambda)
+length(lasso$beta[lasso$beta!=0])
+```
+
+We see 9 non-zero coefficients - V1, V9, V17, V24, V25, V33, V41, V49, V57
+
+We now are using minimizing sum of squared errors as the criterion. The problem is formulated below.
+
+Decision variables:
+
+Beta1, ... , Beta64 coefficient for each X variable  
+z1, ... , z64 binary variables
+
+Objective function:
+
+Minimize
+y^2^ - 2\*Beta\*y + (X\*Beta)^2^
+
+COnstraints:
+
+-M\*zi - Betai <= 0  
+Betai - M\*zi <= 0  
+z1 + ... + z64 <= k
+
+We are running MIQP with k=8. M starts off at 0.01, doubling to 1.28.
+
+```{r}
+library(slam)
+library(gurobi)
+
+param_gen = function(M, k){ # function for forming the constraint matrix
+    A_left = rbind(diag(-1, 64, 64), diag(1, 64, 64))
+    A_right = rbind(diag(-M, 64, 64), diag(-M, 64, 64))
+    A_top = cbind(A_left, A_right)
+    k_constr = c(rep(0, 64), rep(1, 64))
+    A = rbind(A_top, k_constr)
+    rhs = c(rep(0, 128), k)
+    return(list("A" = A, 
+                "rhs" = rhs))
+}
+
+M = 0.01 # set initial value of M
+k = 8 # set number of variables to select
+zeros_64 = matrix(0, 64, 64) # matrix of 64x64 0's for objective function
+
+model = list()
+model$obj = c(-t(X) %*% y, rep(0, 64)) # linear part of the obj
+model$Q = rbind(cbind(0.5 * t(X) %*% X, zeros_64), cbind(zeros_64, zeros_64)) # quadratic part of the obj
+model$sense = rep("<=", 129)
+model$vtype = c(rep("C", 64), rep("B", 64))
+
+beta_try = c(M, rep(0, 127))
+
+while (any(beta_try == M)) { # loop to choose M
+    M = 2 * M
+    params = param_gen(M, k)
+    model$A = params$A
+    model$rhs = params$rhs
+    MIQP_sol = gurobi(model)
+    beta_try = MIQP_sol$x[1:64]
+}
+
+beta_MIQP = beta_try # coefficients using the final M
+beta_MIQP
+```
+  
+![](proj3_q3.PNG)
+  
+Lasso had a prediction error of 0.0068, compared to the MIQP which had a prediction error of 0.0045.
+```{r}
+norm_vec_sq <- function(x) {return(sum(x^2))}
+
+error_lasso = norm_vec_sq(X %*% best_lasso$beta - X %*% beta_real) / norm_vec_sq(X %*% beta_real)
+error_lasso
+
+error_MIQP = norm_vec_sq(X %*% beta_MIQP - X %*% beta_real) / norm_vec_sq(X %*% beta_real)
+error_MIQP
+```

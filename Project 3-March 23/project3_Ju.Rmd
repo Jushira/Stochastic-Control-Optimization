@@ -1,0 +1,88 @@
+---
+title: "Variable Selection with Nonlinear programming"
+output:  
+      html_document:  
+        keep_md: true 
+---
+
+
+Running Lasso with cross validation on the data, we find the best lambda which is show under best_lasso. This yields a model with 9 non-zero coefficients.
+```{r}
+library(glmnet)
+
+load('data.rdata')
+cvfit = cv.glmnet(x = X, y = y)
+best_lasso = glmnet(X, y, family="gaussian", alpha=1, lambda=c(cvfit$lambda.min))
+best_lasso
+coef(cvfit,lambda=best_lam$lambda)
+```
+
+Next, we use mixed-integer quadratic programming for variable selection with minimizing sum of squared errors as the criterion. The problem is formulated below.
+
+**Decision variables:**  
+Beta1, ... , Beta64 coefficient for each X variable  
+z1, ... , z64 binary variable to indicate whether Beta is zero
+
+**Minimize:**  
+(1/2)||y-X\*Beta||^2^  
+OR  
+y^2^ - 2\*Beta\*y + (X\*Beta)^2^
+
+**Subject To:**  
+-M\*zi - Betai <= 0  
+Betai - M\*zi <= 0  
+z1 + ... + z64 <= k
+                
+We run the MIQP with k=8. M starts off at 0.01, doubling to 1.28.
+```{r}
+library(slam)
+library(gurobi)
+
+param_gen = function(M, k){ # function for forming the constraint matrix
+    A_left = rbind(diag(-1, 64, 64), diag(1, 64, 64))
+    A_right = rbind(diag(-M, 64, 64), diag(-M, 64, 64))
+    A_top = cbind(A_left, A_right)
+    k_constr = c(rep(0, 64), rep(1, 64))
+    A = rbind(A_top, k_constr)
+    rhs = c(rep(0, 128), k)
+    return(list("A" = A, 
+                "rhs" = rhs))
+}
+
+M = 0.01 # set initial value of M
+k = 8 # set number of variables to select
+zeros_64 = matrix(0, 64, 64) # matrix of 64x64 0's for objective function
+
+model = list()
+model$obj = c(-t(X) %*% y, rep(0, 64)) # linear part of the obj
+model$Q = rbind(cbind(0.5 * t(X) %*% X, zeros_64), cbind(zeros_64, zeros_64)) # quadratic part of the obj
+model$sense = rep("<=", 129)
+model$vtype = c(rep("C", 64), rep("B", 64))
+
+beta_try = c(M, rep(0, 127))
+
+while (any(beta_try == M)) { # loop to choose M
+    M = 2 * M
+    params = param_gen(M, k)
+    model$A = params$A
+    model$rhs = params$rhs
+    MIQP_sol = gurobi(model)
+    beta_try = MIQP_sol$x[1:64]
+}
+
+beta_MIQP = beta_try # coefficients using the final M
+beta_MIQP
+```
+  
+![](proj3_q3.PNG)
+  
+Lasso had a prediction error of 0.0068, compared to the MIQP which had a prediction error of 0.0045.
+```{r}
+norm_vec_sq <- function(x) {return(sum(x^2))}
+
+error_lasso = norm_vec_sq(X %*% best_lasso$beta - X %*% beta_real) / norm_vec_sq(X %*% beta_real)
+error_lasso
+
+error_MIQP = norm_vec_sq(X %*% beta_MIQP - X %*% beta_real) / norm_vec_sq(X %*% beta_real)
+error_MIQP
+```
