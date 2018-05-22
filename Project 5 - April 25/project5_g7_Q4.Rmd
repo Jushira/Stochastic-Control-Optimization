@@ -1,0 +1,91 @@
+---
+title: "project5_g7_Q4"
+author: "Group 7"
+date: "April 25, 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE}
+rm(list=ls())
+library(MASS)
+library(ggplot2)
+load('queue.rdata')
+```
+
+```{r}
+# Calculating Inter-Arrival TIme
+IA <- diff(A)
+
+# Fit distributions for Inter-Arrival Time
+g_fit_i <- fitdistr(IA, "gamma")
+
+# Fit distributions for Service Time
+g_fit_s <- fitdistr(S, "gamma")
+
+```
+
+# Question - 4
+
+(Extra credit) Now we will consider the queuing configuration in 2 where each counter has its own queue, but arriving customers join the queue that has the shortest queue length. Use a simulation to find the optimal number of checkout counters to keep open in this configuration. What is the expected cost (pay + penalty)?
+
+```{r,warning=FALSE}
+# Assigning the number of simulations which refers to the number of customers walking into the store
+N = 10000
+
+# Vector to hold the cost with different counters
+totalCost = rep(NA, 20) 
+
+# Using gamma distribution to simulate the arrival and service times
+for (i in 1:20) 
+{
+  gamma_inter = rgamma(n=N-1, shape=g_fit_i$estimate[1], rate=g_fit_i$estimate[2])
+  gamma_arrival = c(0, cumsum(gamma_inter))
+  gamma_service = rgamma(n=N, shape=g_fit_s$estimate[1], rate=g_fit_s$estimate[2])
+  
+  queueLength = rep(0,i) # length of queues for each of the counters
+  D = rep(0,i) # service end times
+  queueLength[1] = 1
+  W = rep(NA,N)
+  T = 0
+  D[1] = T + gamma_service[1]
+  W[1] = 0
+  
+  for (p in 2:N) 
+  {
+    queueLength[(D<=gamma_arrival[p]) & (queueLength!=0)] = queueLength[(D<=gamma_arrival[p]) & (queueLength!=0)] - 1 # if a customer arrives after the service end times of some counters, then queueLength decreases by 1
+    x = which.min(queueLength) # customer chooses queue with shortest length
+    queueLength[x] = queueLength[x]+1 # after customer joins the line, queueLength increases by 1
+    T = max(D[x], gamma_arrival[p])
+    old_D = D[x]
+    D[x] = T + gamma_service[p]
+    
+    W[p] = max((old_D - gamma_arrival[p]),0)
+    
+  }
+  totalCost[i] = sum(W > 10) + (max(D)/60 * 40 * i)
+}
+
+
+# Total cost for different counters
+totalCost
+
+# Plot the individual cost for different counters
+plot(1:20, totalCost, type='line', xlab='# of Counters Open', ylab='Estimated Cost', main='Multiple Queues with Shortest Queue Selection')
+
+
+# Minimum of the costs
+min(totalCost)
+
+# Counter configuration which has the lowest cost
+which.min(totalCost)
+
+# Mark the line in the plot
+abline(v = which.min(totalCost) ,lwd=3, col="red")
+```
+
+The third scenario here is by far the most common situation that we face in grocery stores. There are multiple counters, and the customers join the queue which has the smallest number of customers. Solving for this method, we see that 13 is again the ideal number of counters which should be set up. This problem was solved by simulating for 10,000 customers.
+

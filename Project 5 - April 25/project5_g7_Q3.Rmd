@@ -1,0 +1,88 @@
+---
+title: "project5_g7_Q3"
+author: "Group 7"
+date: "April 25, 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning=FALSE}
+rm(list=ls())
+library(MASS)
+library(ggplot2)
+load('queue.rdata')
+```
+
+```{r}
+# Calculating Inter-Arrival TIme
+IA <- diff(A)
+
+# Fit distributions for Inter-Arrival Time
+g_fit_i <- fitdistr(IA, "gamma")
+
+
+# Fit distributions for Service Time
+g_fit_s <- fitdistr(S, "gamma")
+```
+
+# Question - 3
+
+Next we will try another queuing configuration, where all queues are combined and made into one queue. All customers join this queue and then move to any counter that opens up. Again, use a simulation to find the optimal number of checkout counters to keep open in this configuration. What is the expected cost (salary + penalty)?
+
+
+
+```{r,warning=FALSE}
+# Assigning the number of simulations which refers to the number of customers walking into the store
+N = 10000 
+
+# Vector to hold the cost with different counters
+totalCost = rep(NA, 20) 
+
+# Using gamma distribution to simulate the arrival and service times
+for (i in 1:20) 
+{
+  gamma_inter = rgamma(n=N-1, shape=g_fit_i$estimate[1], rate=g_fit_i$estimate[2])
+  gamma_arrival = c(0, cumsum(gamma_inter))
+  gamma_service = rgamma(n=N, shape=g_fit_s$estimate[1], rate=g_fit_s$estimate[2])
+  
+  D = rep(0, i) # vector to hold service end times
+  W = rep(NA, N) # wait times
+  T = 0 # service start time
+  D[1] = T + gamma_service[1] # first service end time = start time + first service time
+  W[1] = 0 # first wait time is 0
+  
+  for (p in 2:N) # loop through the different customers
+  {
+    x = which.min(D) # assign each customer the counter with the least service end time
+    old_D = D[x] # counter's previous service end time
+    T = max(old_D, gamma_arrival[p]) # service start time = max of customer arrival time and old_D
+    D[x] = T + gamma_service[p]
+    
+    W[p] = max((old_D - gamma_arrival[p]), 0) # if the customer arrives after the previous service end time, the wait time is 0
+  }
+  totalCost[i] = sum(W > 10) + (max(D)/60 * 40 * i)
+}
+
+
+# Total cost for different counters
+totalCost
+
+# Plot the individual cost for different counters
+plot(1:20, totalCost, type='line', xlab='# of Counters Open', ylab='Estimated Cost', main='Single Queue')
+
+
+# Minimum of the costs
+min(totalCost)
+
+# Counter configuration which has the lowest cost
+which.min(totalCost)
+
+# Mark the line in the plot
+abline(v = which.min(totalCost) ,lwd=3, col="red")
+```
+
+The second scenario here is similar to self-checkout counters in H-E-B. Every customer joinss one queue, and then whenever a counter opens up, the customer next in line joins the queue. Solving for this method, we see that 14 is the ideal number of counters which should be set up. This problem was solved by simulating for 10,000 customers 

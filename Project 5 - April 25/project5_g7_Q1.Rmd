@@ -1,0 +1,95 @@
+---
+title: "MIS 381N - Stochastic Control and Optimization Project 5"
+author: 'Jushira Thelakkat, Zhiyi(Claire) Yang, Jiayan (Will) Lu, Sidhaarthan Velur
+  Gopalakrishnan '
+date: "April 25, 2018"
+output:
+  word_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE,warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE}
+rm(list=ls())
+library(MASS)
+library(ggplot2)
+load('queue.rdata')
+```
+
+# Question 1
+
+Use the function "fitdistr" in the R package MASS, to find the right parameters for inter-arrival and service time distributions. Try Gamma, Exponential and the Weibull distributions. Please use qqplots to to show the goodness of fits.
+
+```{r,warning=FALSE}
+# Calculating Inter-Arrival TIme
+IA <- diff(A)
+
+# Fit distributions for Inter-Arrival Time
+e_fit_i <- fitdistr(IA, "exponential")
+g_fit_i <- fitdistr(IA, "gamma")
+w_fit_i <- fitdistr(IA, "weibull")
+
+# Fit distributions for Service Time
+e_fit_s <- fitdistr(S, "exponential")
+g_fit_s <- fitdistr(S, "gamma")
+w_fit_s <- fitdistr(S, "weibull")
+
+# Convert variables to a dataframe
+service_arrival <- data.frame(S,A)
+inter_arrival <- data.frame(IA)
+
+# QQ-Plot for Inter-Arrival Time
+ggplot(inter_arrival, aes(sample = IA)) +
+  stat_qq(distribution = qexp, 
+          dparams = list(e_fit_i$estimate[1]), 
+          geom = "line",
+          aes(color = "exponential")) +
+  stat_qq(distribution = qgamma, 
+          dparams = list(g_fit_i$estimate[1], g_fit_i$estimate[2]), 
+          geom = "line",
+          aes(color = "gamma")) +
+  stat_qq(distribution = qweibull, 
+          dparams = list(w_fit_i$estimate[1], w_fit_i$estimate[2]), 
+          geom = "line",
+          aes(color = "Weibull")) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  scale_color_manual(name = "", 
+                     values = c("exponential" = "black",
+                                "gamma" = "green",
+                                "Weibull" = "red"),
+                     breaks = c("exponential",
+                                "gamma",
+                                "Weibull")) +
+  labs(title = "Q-Q Plot for Inter-Arrival Time")
+
+# QQ-Plot for Service Time
+ggplot(service_arrival, aes(sample = S)) +
+  stat_qq(distribution = qexp, 
+          dparams = list(e_fit_s$estimate[1]), 
+          geom = "line",
+          aes(color = "exponential")) +
+  stat_qq(distribution = qgamma, 
+          dparams = list(g_fit_s$estimate[1], g_fit_s$estimate[2]), 
+          geom = "line",
+          aes(color = "gamma")) +
+  stat_qq(distribution = qweibull, 
+          dparams = list(w_fit_s$estimate[1], w_fit_s$estimate[2]), 
+          geom = "line",
+          aes(color = "Weibull")) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed") +
+  scale_color_manual(name = "", 
+                     values = c("exponential" = "black",
+                                "gamma" = "green",
+                                "Weibull" = "red"),
+                     breaks = c("exponential",
+                                "gamma",
+                                "Weibull")) +
+  labs(title = "Q-Q Plot for Service Time")
+```
+
+Looking at the Q-Q plot for both Inter-Arrival times and Customer Wait times, we can see that the gamma distribution is the closest to the actual distribution among weibull, exponential and gamma distribution
+

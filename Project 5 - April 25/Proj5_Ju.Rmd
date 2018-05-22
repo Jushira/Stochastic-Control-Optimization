@@ -1,0 +1,40 @@
+---
+title: "Stochastic Project 5"
+author: "Jushira"
+date: "April 23, 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE}
+rm(list=ls())
+library(MASS)
+
+load('queue.rdata')
+```
+
+
+```{r}
+inter_A = diff(A, lag=1) # calculate inter-arrival times
+```
+
+```{r}
+#Inter-arrival times
+#Trying Gamma, Exponential & Weibull distributions using fitdistr function
+
+A_gamma = fitdistr(x=inter_A, densfun="gamma")
+A_exp = fitdistr(x=inter_A, densfun="exponential")
+A_weibull = fitdistr(x=inter_A, densfun="weibull")
+
+#Service times
+#Trying Gamma, Exponential & Weibull distributions
+
+S_gamma = fitdistr(x=S, densfun="gamma")
+S_exp = fitdistr(x=S, densfun="exponential")
+S_weibull = fitdistr(x=S, densfun="weibull")
+```
+
+

@@ -1,0 +1,112 @@
+---
+title: "project5_g7_Q2"
+author: "Group 7"
+date: "April 25, 2018"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE}
+rm(list=ls())
+library(MASS)
+library(ggplot2)
+load('queue.rdata')
+```
+
+```{r}
+# Calculating Inter-Arrival TIme
+IA <- diff(A)
+
+# Fit distributions for Inter-Arrival Time
+g_fit_i <- fitdistr(IA, "gamma")
+
+
+# Fit distributions for Service Time
+g_fit_s <- fitdistr(S, "gamma")
+```
+
+# Question 2
+
+Use the distribution that fits the best to simulate the following queuing system. In this system, there are a number of checkout counters open, each with its own queue. Arriving customers randomly join one queue. Use your simulation to find the optimal number of checkout counters to keep open. What is the expected cost (salary + penalty)?
+
+
+```{r,warning=FALSE}
+# Assigning the number of simulations which refers to the number of customers walking into the store
+N = 10000 # 10,000 simulations
+
+# Vector to hold the cost with different counters open
+totalCost = rep(NA, 20) 
+
+# Setting seed
+set.seed(123)
+
+
+for (i in 1:20) 
+{
+  # Simulate the counter that was picked by the customer randomly
+  counter = sample(1:i, N, replace=TRUE) 
+  # Matrix which contains customers as rows and counters as columns
+  counterSetup = matrix(0, N, i) 
+  for (j in (1:length(counter))) # populate matrix
+  {
+    counterSetup[j,counter[j]] = 1
+  }
+  
+  # Using gamma distribution to simulate the arrival and service times
+  gamma_inter = rgamma(n=N-1, shape=g_fit_i$estimate[1], rate=g_fit_i$estimate[2])
+  gamma_arrival = c(0, cumsum(gamma_inter))
+  gamma_service = rgamma(n=N, shape=g_fit_s$estimate[1], rate=g_fit_s$estimate[2])
+  # Hold costs for each of the counter
+  individualCost = rep(NA, i) 
+  # Maximum duration of a line
+  D_max = rep(NA, i) 
+  for (k in (1:i)) 
+  {
+    arrivalLine = matrix(0, N, i) # simulated arrival times
+    serviceLine = matrix(0, N, i) # simulated service times
+    arrivalLine[,k] = counterSetup[,k] * gamma_arrival
+    serial = min(which(arrivalLine[,k] != 0))
+    arrivalLine = arrivalLine[,k][arrivalLine[,k] > 0]
+    serviceLine[,k] = counterSetup[,k] * gamma_service
+    serviceLine = serviceLine[,k][serviceLine[,k] > 0]
+    T = rep(NA,length(arrivalLine)) # service start times
+    D = rep(NA,length(arrivalLine)) # durations
+    W = rep(NA,length(arrivalLine)) # wait times
+    
+    T[1] = min(arrivalLine) # set first service start time as the first arrival time in the line
+    D[1] = T[1] + serviceLine[serial] # set duration as the first arrival time + the first service time
+    W[1] = 0 # set first wait time to 0
+    
+    for (z in 2:length(arrivalLine)) # loop to calculate service times and durations
+    {
+      T[z] = max(D[z-1], arrivalLine[z])
+      D[z] = T[z] + serviceLine[z]
+    }
+    W = T - arrivalLine # calculate wait times
+    individualCost[k] = sum(W > 10) # calculate cost per line
+    D_max[k] = max(D) # save max duration to use as minutes all counters are open for calculating final cost
+  }
+  totalCost[i] = sum(individualCost, na.rm=TRUE) + 40 * max(D_max)/60 * i
+}
+
+# Total cost for different counter configurations
+totalCost
+
+# Plot the individual cost for different counters
+plot(1:20, totalCost, type='line', xlab='Number of Counters Open', ylab='Estimated Cost', main='Multiple Counters with Random Assignment')
+
+# Minimum of the costs
+min(totalCost)
+
+# Counter configuration which has the lowest cost
+which.min(totalCost)
+
+# Mark the line in the plot
+abline(v = which.min(totalCost) ,lwd=3, col="red")
+```
+
+
+When there is an option to open as many counters as we want between 1 and 20 to tackle the Black Friday sale, assuming that the customer joins any queue randomly, with 10,000 customers, we see that 15 is the ideal number of counters that should be kept open to reduce the costs as much as possible. As found in the first part, the inter-arrival and wait times are modeled using a gamma distribution.
