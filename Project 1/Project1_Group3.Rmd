@@ -1,0 +1,202 @@
+---
+title: "MIS 381N - Project 1"
+author: "Group 3 - Scroggings, Thelakkat, Tanwisuth, Wooten"
+date: "February 13, 2018"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list=ls())
+library(lpSolve)
+```
+
+##Inputs 
+
+```{r}
+#Liabilities 
+l = c(12000,18000,20000,20000,16000,15000,12000,10000)
+
+#Bond prices
+p = c(102,99,101,98,98,104,100,101,102,94)
+
+#Coupons
+coupons = c(5,3.5,5,3.5,4,9,6,8,9,7)
+
+#Maturities
+m = c(1,2,2,3,4,5,5,6,7,8)
+```
+
+## Q1. Formulate portfolio construction problem as a linear program. Clearly list and describe the decision variables, the objective, and all the constraints.
+
+Decision Variables: Amount of each of the 10 bonds i.e. x1,...,x10
+
+Objective: Minimize the total cost of the bonds 102x1 + 99x2 + 101x3 + 98x4 + 98x5 + 104x6 + 100x7 + 101x8 + 102x9 + 94x10
+
+Constraints: cash flow inward from coupon and maturity payments must equal cash flow outward to liabilities for each year (1-8)
+
+```{r}
+#Objective
+c = p
+
+#Constraints
+A = matrix(0,length(l),length(c))
+for (i in seq_along(coupons)){
+  A[1:m[i]-1,i] = coupons[i]
+  #Matrix with maturity and coupon payments
+  A[m[i],i] = 100 + coupons[i]
+}
+
+#Direction
+dir = rep("=",length(l))
+
+#Constraints Vector 
+b = l
+```
+
+## Q2. Solving the test case
+
+```{r}
+#Solve LP
+s = lp("min",c,A,dir,b)
+sol = s$solution
+
+#Optimal Solution
+for (i in seq_along(sol)){
+  cat("Bond",i,"\t:\t",sol[i],"\n")
+}
+```
+
+## Q3. Writing the function
+
+The dedicate_g3 function will construct a portfolio for any set of liabilities and bonds. The function takes four inputs: P, C, M, and L. P is the vector containing the prices of the bonds. C is the vector containing the coupon payments for the bonds. M is the vector containing the maturity (in years) for the bonds. Finally, L is the vector of non-negative liabilities for each year. The function outputs the optimal number of each bond to purchase to minimize price of bonds
+
+```{r}
+dedicate_g3 <- function(P,C,M,L){
+  #Objective
+  c = P
+  
+  #Constraints
+  #Initialize constraints matrix with zeros
+  A = matrix(0,length(L), length(C))
+  
+  for (i in seq_along(C)){
+    A[1:M[i]-1,i] = C[i]
+    
+    #Matrix with maturity and final coupon payments
+    A[M[i],i] = 100 + C[i]
+  }
+  
+  #Direction
+  dir = rep("=",length(L))
+  
+  #Constraints Vector
+  b = L
+  
+  #Solution
+  s = lp("min",c,A,dir,b,compute.sens=1)
+  return(s)
+}
+```
+
+Let's test the function using our test case from problem 2.
+
+```{r}
+#Inputs
+#Liabilities
+l = c(12000,18000,20000,20000,16000,15000,12000,10000)
+
+#Bond prices
+p = c(102,99,101,98,98,104,100,101,102,94)
+
+#Coupons
+coup = c(5,3.5,5,3.5,4,9,6,8,9,7)
+
+#Maturities
+m = c(1,2,2,3,4,5,5,6,7,8)
+
+#Calling the function
+s = dedicate_g3(p,coup,m,l)
+sol = s$solution
+
+#Optimal Solution
+for (i in seq_along(sol)){
+  cat("Bond",i,"\t:\t",sol[i],"\n")
+}
+```
+
+The results match! 
+
+## Q4. Construct a dedicated portfolio
+
+Bond information was collected from the Wall Street Journal (http://online.wsj.com/mdc/public/page/2_3020-treasury.html#treasuryB) and stored as a csv file named "TreasuryQuotes_wsj.csv".
+
+```{r}
+#Reading bond information
+Bonds = read.csv("TreasuryQuotes_wsj.csv")
+```
+
+Create input vectors
+
+```{r}
+#Limit bonds to only those that mature/pay coupons at the end of June/December
+dates = c("6/30/2017","12/31/2017","6/30/2018","12/31/2018","6/30/2019","12/31/2019","6/30/2020","12/31/2020","6/30/2021","12/31/2021","6/30/2022","12/31/2022")
+
+Bonds = Bonds[Bonds$Maturity %in% dates,]
+
+#Price Vector
+P = Bonds$Asked
+
+#Coupon Vector
+C = Bonds$Coupon/2
+
+#Maturities Vector (in periods/half-years)
+#Assign each date to period number
+periods = seq_along(dates)
+names(periods) = dates
+
+#Initialize maturities vector with zeros
+M = rep(0,length(Bonds$Maturity))
+
+#Add period number corresponding to each maturity date to maturities vector
+for (i in seq_along(M)){
+  date = toString(Bonds$Maturity[i])
+  period = periods[date]
+  
+  M[i] = period
+}
+
+#Non-negative liabilities vector
+L = 1000000*c(9,9,10,10,6,6,9,9,10,10,5,3)
+```
+
+Finally, we can solve for the optimal amount of each bond to purchase using the function we defined in Q3.
+
+```{r}
+options("scipen"=100, "digits"=4)
+#Calling the function
+s = dedicate_g3(P,C,M,L)
+
+optimal_solution = data.frame(Bonds$Maturity,Bonds$Coupon,Bonds$Asked,s$solution)
+names(optimal_solution) = c("Maturity","Coupon","Price","Amount to Purchase")
+optimal_solution
+```
+
+### Sensitivity Analysis
+Next we can evaluate the sensitivity of this model to the liability constraints.
+
+```{r}
+optimal_sol_sens = data.frame(dates,L,s$duals[0:length(L)],s$duals.from[0:length(L)],s$duals.to[0:length(L)])
+names(optimal_sol_sens) = c("Date","Liability","Duals","Duals From","Duals To")
+
+optimal_sol_sens
+```
+
+```{r}
+plot(periods, optimal_sol_sens$Duals, main="Liability Constraint Sensitivities Over Time", xlab="Liability Date", ylab="Duals", type='o', col='blue', xaxt='n')
+axis(1, at=1:12, labels=dates[1:12])
+```
+
+The duals (i.e. sensitivity of the constraint for each half-year) can be interperted as the time value of money. In other words,  1 dollar on 12/31/2022 is worth 88 cents today. The Duals From & To are the range of liabilities for that date for which the duals/sensitivity applies.
